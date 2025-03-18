@@ -1,0 +1,6 @@
+changeLogFile=liquibase/changelog.xml
+url=jdbc:postgresql://db:5432/mydb
+username=user
+password=user
+driver=org.postgresql.Driver
+logLevel=info
