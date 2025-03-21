@@ -1,14 +1,14 @@
 {
   "$schema": "https://json.schemastore.org/nest-cli",
   "collection": "@nestjs/schematics",
-  "sourceRoot": "apps/subzero_microservicos/src",
+  "sourceRoot": "apps/device/src",
   "compilerOptions": {
     "deleteOutDir": true,
     "webpack": true,
-    "tsConfigPath": "apps/subzero_microservicos/tsconfig.app.json"
+    "tsConfigPath": "apps/device/tsconfig.app.json"
   },
   "monorepo": true,
-  "root": "apps/subzero_microservicos",
+  "root": "apps/device",
   "projects": {
     "device": {
       "type": "application",
@@ -17,15 +17,6 @@
       "sourceRoot": "apps/device/src",
       "compilerOptions": {
         "tsConfigPath": "apps/device/tsconfig.app.json"
-      }
-    },
-    "subzero_microservicos": {
-      "type": "application",
-      "root": "apps/subzero_microservicos",
-      "entryFile": "main",
-      "sourceRoot": "apps/subzero_microservicos/src",
-      "compilerOptions": {
-        "tsConfigPath": "apps/subzero_microservicos/tsconfig.app.json"
       }
     }
   }
