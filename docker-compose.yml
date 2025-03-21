@@ -6,32 +6,49 @@ services:
       POSTGRES_USER: user
       POSTGRES_PASSWORD: user
       POSTGRES_DB: mydb
+      POSTGRES_HOST_AUTH_METHOD: trust 
     ports:
-      - "5432:5432"
+      - "5432:5432" 
     volumes:
       - postgres-data:/var/lib/postgresql/data
     networks:
       - subzero-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d mydb"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
     restart: unless-stopped
-   
+
   liquibase:
     image: liquibase/liquibase:latest
     depends_on:
-      - db
+      db:
+        condition: service_healthy
+    working_dir: /liquibase
     volumes:
-      - /apps/device/liquibase:/liquibase/changelog
-    command: >
-      --changeLogFile=/liquibase/changelog/db.changelog-master.xml
-      --url=jdbc:postgresql://db:5432/mydb
-      --username=user
-      --password=user
-      update
+      - ./apps/device/liquibase/changelog:/liquibase/changelog
+      - ./apps/device/liquibase/liquibase.properties:/liquibase/liquibase.properties
+    command: 
+      - bash
+      - -c
+      - |
+        liquibase clearCheckSums \
+          --url=jdbc:postgresql://db:5432/mydb \
+          --username=user \
+          --password=user \
+        && liquibase update \
+          --url=jdbc:postgresql://db:5432/mydb \
+          --username=user \
+          --password=user \
+          --changelog-file=changelog/db.changelog-master.xml
     networks:
       - subzero-network
-      
+
 volumes:
   postgres-data:
     driver: local
+
 networks:
   subzero-network:
     driver: bridge
