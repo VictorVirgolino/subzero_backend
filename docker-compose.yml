@@ -78,8 +78,9 @@ services:
       - --memory=2G
       - --reserve-memory=0M
       - --node-id=0
-      - --kafka-addr=PLAINTEXT://0.0.0.0:9092,OUTSIDE://0.0.0.0:29092
-      - --advertise-kafka-addr=PLAINTEXT://redpanda:9092,OUTSIDE://localhost:29092
+      - --auto-create-topics-enabled=true
+      - --kafka-addr=PLAINTEXT://0.0.0.0:9092
+      - --advertise-kafka-addr=PLAINTEXT://redpanda:9092
       - --overprovisioned
     ports:
       - "9092:9092"
@@ -114,7 +115,7 @@ services:
       interval: 10s
       timeout: 30s
       retries: 15
-      start_period: 40s
+      start_period: 60s
 
   redpanda-console:
     image: docker.redpanda.com/redpandadata/console:v2.2.3

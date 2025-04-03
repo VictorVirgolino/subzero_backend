@@ -1,37 +1,47 @@
-import { Injectable, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { KafkaService } from '../kafka.service';
 import { SchemaRegistryService } from '../schema/schema-registry.service';
 
 @Injectable()
 export class DeviceDataProducer implements OnModuleInit {
-  private producer;
-  
+  private readonly logger = new Logger(DeviceDataProducer.name);
+  private producerInitialized = false;
+
   constructor(
     private readonly kafkaService: KafkaService,
-    private readonly schemaRegistry: SchemaRegistryService,
+    private readonly schemaRegistry: SchemaRegistryService
   ) {}
 
   async onModuleInit() {
-    await this.schemaRegistry.initialize(); 
-    this.producer = this.kafkaService.getProducer();
-    await this.producer.connect();
+    await this.initialize();
   }
 
-  async send(payload: any) {
-    const encoded = await this.schemaRegistry
-      .getRegistry()
-      .encode(this.schemaRegistry.getSchemaId(), payload);
+  private async initialize() {
+    await this.schemaRegistry.initialize();
+    this.producerInitialized = true;
+    this.logger.log('Producer inicializado');
+  }
+
+  public async send(payload: any) {
+    if (!this.producerInitialized) {
+      throw new Error('Producer não inicializado');
+    }
+
+    try {
+      const encoded = await this.schemaRegistry.getRegistry().encode(
+        this.schemaRegistry.getSchemaId(),
+        payload
+      );
       
-    await this.producer.send({
-      topic: 'device-service-esp-history-data',
-      messages: [{
-        value: encoded,
-        headers: {
-          'schemaId': this.schemaRegistry.getSchemaId(),
-          'valueSubject': 'device-service-esp-history-data-value'
-        }
-      }],
-    });
-    console.log('📤 [Kafka] Sent:', payload);
+      await this.kafkaService.getProducer().send({
+        topic: 'device-service-esp-history-data',
+        messages: [{ value: encoded }]
+      });
+      
+      this.logger.log('Mensagem enviada com sucesso');
+    } catch (error) {
+      this.logger.error('Erro ao enviar mensagem', error.stack);
+      throw error;
+    }
   }
 }
