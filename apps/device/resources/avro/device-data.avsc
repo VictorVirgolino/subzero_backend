@@ -1,0 +1,11 @@
+{
+  "type": "record",
+  "name": "DeviceData",
+  "namespace": "com.subzero.device",
+  "fields": [
+    { "name": "id", "type": "string" },
+    { "name": "lat", "type": "double" },
+    { "name": "long", "type": "double" },
+    { "name": "temp", "type": "double" }
+  ]
+}

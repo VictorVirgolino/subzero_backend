@@ -1,12 +1,19 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Post, Body } from '@nestjs/common';
 import { DeviceService } from './device.service';
 
-@Controller()
+@Controller('device')
 export class DeviceController {
-  constructor(private readonly deviceService: DeviceService) {}
+  constructor(
+    private readonly deviceService: DeviceService,
+  ) {}
 
-  @Get()
-  getHello(): string {
-    return this.deviceService.getHello();
+  @Post('send')
+  async send(@Body() payload: any) {
+    try{
+      await this.deviceService.handleDevice(payload);
+      return { message: 'Mensagem enviada com sucesso ✅' };
+    }catch(error){
+      throw error
+    }
   }
 }

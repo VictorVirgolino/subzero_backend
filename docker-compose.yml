@@ -1,31 +1,54 @@
 services:
+  app:
+    build: .
+    container_name: nestjs-app
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+      NODE_ENV: production
+    ports:
+      - "3000:3000"
+    depends_on:
+      schema-registry:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+      liquibase:
+        condition: service_completed_successfully
+    networks:
+      - subzero-network
+    restart: unless-stopped
   db:
-    image: postgres
+    image: postgres:15 
     container_name: postgres-container
     environment:
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: user
-      POSTGRES_DB: mydb
-      POSTGRES_HOST_AUTH_METHOD: trust 
+      POSTGRES_USER: postgres
+      POSTGRES_DB: postgres
+      POSTGRES_PASSWORD: postgres
     ports:
-      - "5432:5432" 
+      - "5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     networks:
       - subzero-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U user -d mydb"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres -h 127.0.0.1"]
       interval: 5s
       timeout: 5s
-      retries: 5
-    restart: unless-stopped
+      retries: 10
+    command: >
+      postgres
+      -c listen_addresses='*'
 
   liquibase:
     image: liquibase/liquibase:latest
+    container_name: liquibase
     depends_on:
       db:
         condition: service_healthy
-    working_dir: /liquibase
     volumes:
       - ./apps/device/liquibase/changelog:/liquibase/changelog
       - ./apps/device/liquibase/liquibase.properties:/liquibase/liquibase.properties
@@ -34,14 +57,86 @@ services:
       - -c
       - |
         liquibase clearCheckSums \
-          --url=jdbc:postgresql://db:5432/mydb \
-          --username=user \
-          --password=user \
+          --url=jdbc:postgresql://db:5432/postgres \
+          --username=postgres \
+          --password=postgres \
         && liquibase update \
-          --url=jdbc:postgresql://db:5432/mydb \
-          --username=user \
-          --password=user \
+          --url=jdbc:postgresql://db:5432/postgres \
+          --username=postgres \
+          --password=postgres \
           --changelog-file=changelog/db.changelog-master.xml
+    networks:
+      - subzero-network
+
+  redpanda:
+    image: redpandadata/redpanda:latest
+    container_name: redpanda-project
+    volumes:
+      - ./apps/console-config:/console.config
+    environment:
+      CONFIG_FILEPATH: "/console.config/redpanda.yaml"
+    command:
+      - redpanda
+      - start
+      - --smp=1
+      - --memory=2G
+      - --reserve-memory=0M
+      - --node-id=0
+      - --kafka-addr=PLAINTEXT://0.0.0.0:9092
+      - --advertise-kafka-addr=PLAINTEXT://redpanda:9092
+      - --overprovisioned
+    ports:
+      - "9092:9092"
+      - "29092:29092"
+    networks:
+      - subzero-network
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health || exit 0"] 
+      interval: 10s
+      timeout: 30s
+      retries: 10
+      start_period: 60s  
+
+  schema-registry:
+    image: confluentinc/cp-schema-registry:7.4.1
+    ports:
+    - "8081:8081"
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      SCHEMA_REGISTRY_SCHEMA_COMPATIBILITY: "NONE" 
+      SCHEMA_REGISTRY_DEBUG: "true"
+      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: PLAINTEXT://redpanda:9092
+      SCHEMA_REGISTRY_LOG4J_ROOT_LOGLEVEL: DEBUG
+    depends_on:
+      redpanda:
+        condition: service_healthy
+    networks:
+      - subzero-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8081/subjects || exit 1"]
+      interval: 10s
+      timeout: 30s
+      retries: 15
+      start_period: 60s
+
+  redpanda-console:
+    image: docker.redpanda.com/redpandadata/console:v2.2.3
+    container_name: redpanda-console
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./apps/console-config:/console.config
+    environment:
+      SCHEMA_REGISTRY_API_PATH: "/apis/ccompat/v7"
+      SCHEMA_REGISTRY_REQUEST_TIMEOUT_MS: "30000"
+      CONFIG_FILEPATH: "/console.config/console-config.yaml"
+      LOG_LEVEL: "debug"
+    depends_on:
+      redpanda:
+        condition: service_healthy
+      schema-registry:
+        condition: service_healthy
     networks:
       - subzero-network
 

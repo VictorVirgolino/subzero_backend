@@ -1,0 +1,7 @@
+kafka:
+  brokers: ["redpanda:9092"]
+  tls:
+    enabled: false
+  schemaRegistry:
+    enabled: true
+    urls: ["http://schema-registry:8081"]
