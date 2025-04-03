@@ -70,7 +70,11 @@ services:
 
   redpanda:
     image: redpandadata/redpanda:latest
-    container_name: redpanda
+    container_name: redpanda-project
+    volumes:
+      - ./apps/console-config:/console.config
+    environment:
+      CONFIG_FILEPATH: "/console.config/redpanda.yaml"
     command:
       - redpanda
       - start
@@ -78,7 +82,6 @@ services:
       - --memory=2G
       - --reserve-memory=0M
       - --node-id=0
-      - --auto-create-topics-enabled=true
       - --kafka-addr=PLAINTEXT://0.0.0.0:9092
       - --advertise-kafka-addr=PLAINTEXT://redpanda:9092
       - --overprovisioned

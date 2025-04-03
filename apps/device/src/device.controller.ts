@@ -9,7 +9,11 @@ export class DeviceController {
 
   @Post('send')
   async send(@Body() payload: any) {
-    await this.deviceService.handleDevice(payload);
-    return { message: 'Mensagem enviada com sucesso ✅' };
+    try{
+      await this.deviceService.handleDevice(payload);
+      return { message: 'Mensagem enviada com sucesso ✅' };
+    }catch(error){
+      throw error
+    }
   }
 }

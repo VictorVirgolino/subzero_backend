@@ -6,6 +6,11 @@ export class DeviceService {
   constructor(private readonly deviceProducer: DeviceDataProducer) {}
 
   async handleDevice(payload: any) {
-    await this.deviceProducer.send(payload);
+    try{
+      await this.deviceProducer.send(payload);
+    }catch(error) {
+      throw Error
+    }
+    
   }
 }

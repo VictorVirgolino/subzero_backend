@@ -1,75 +1,74 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
-import { Kafka, Producer, Admin, Consumer } from 'kafkajs';
+import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import { Kafka, Producer, Consumer, Admin } from 'kafkajs';
 
 @Injectable()
-export class KafkaService implements OnModuleInit {
+export class KafkaService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(KafkaService.name);
   private kafka: Kafka;
   private producer: Producer;
   private admin: Admin;
+  private consumers: Consumer[] = [];
 
   async onModuleInit() {
-    await this.initialize();
-  }
-
-  private async initialize() {
     this.kafka = new Kafka({
       clientId: 'device-service',
       brokers: ['redpanda:9092'],
-      connectionTimeout: 30000,
+      connectionTimeout: 10000,
       retry: {
-        maxRetryTime: 45000,
-        initialRetryTime: 10000,
-        retries: 15
+        initialRetryTime: 3000,
+        retries: 5
       }
     });
 
-    await this.connectProducer();
-    await this.ensureTopicExists();
+    await this.initializeProducer();
+    await this.ensureTopicExists('device-service-esp-history-data');
   }
 
-  private async connectProducer() {
+  private async initializeProducer() {
     this.producer = this.kafka.producer();
-    try {
-      await this.producer.connect();
-      this.logger.log('Producer conectado ao Kafka');
-    } catch (err) {
-      throw new Error(`Falha na conexão do Producer: ${err.message}`);
-    }
+    await this.producer.connect();
+    this.logger.log('Producer conectado ao Redpanda');
   }
 
-  private async ensureTopicExists() {
+  private async ensureTopicExists(topic: string) {
     this.admin = this.kafka.admin();
-    const topic = 'device-service-esp-history-data';
+    await this.admin.connect();
     
-    try {
-      await this.admin.connect();
-      const topics = await this.admin.listTopics();
-      
-      if (!topics.includes(topic)) {
-        await this.admin.createTopics({
-          topics: [{
-            topic,
-            numPartitions: 1,
-            replicationFactor: 1
-          }]
-        });
-        this.logger.log(`Tópico ${topic} criado`);
-      }
-    } finally {
-      await this.admin.disconnect();
+    const existingTopics = await this.admin.listTopics();
+    if (!existingTopics.includes(topic)) {
+      await this.admin.createTopics({
+        topics: [{
+          topic,
+          numPartitions: 1,
+          replicationFactor: 1
+        }]
+      });
+      this.logger.log(`Tópico ${topic} criado`);
     }
+    await this.admin.disconnect();
   }
 
-  public getProducer() {
-    return this.producer;
+  public async sendMessage(topic: string, message: Buffer) {
+    await this.producer.send({
+      topic,
+      messages: [{ value: message }]
+    });
   }
 
   public createConsumer(groupId: string) {
-    return this.kafka.consumer({ 
+    const consumer = this.kafka.consumer({ 
       groupId,
       sessionTimeout: 30000,
       heartbeatInterval: 10000
     });
+    
+    this.consumers.push(consumer);
+    return consumer;
+  }
+
+  async onModuleDestroy() {
+    await this.producer.disconnect();
+    await Promise.all(this.consumers.map(consumer => consumer.disconnect()));
+    this.logger.log('Conexões Kafka encerradas');
   }
 }

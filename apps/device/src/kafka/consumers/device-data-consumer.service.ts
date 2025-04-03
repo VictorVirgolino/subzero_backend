@@ -5,8 +5,8 @@ import { SchemaRegistryService } from '../schema/schema-registry.service';
 
 @Injectable()
 export class DeviceDataConsumer implements OnModuleInit {
+  private readonly TOPIC = 'device-service-esp-history-data';
   private readonly logger = new Logger(DeviceDataConsumer.name);
-  private consumer;
 
   constructor(
     private readonly kafkaService: KafkaService,
@@ -14,42 +14,37 @@ export class DeviceDataConsumer implements OnModuleInit {
   ) {}
 
   async onModuleInit() {
-    await this.initialize();
+    await this.startConsumer();
   }
 
-  private async initialize() {
-    await this.schemaRegistry.initialize();
+  private async startConsumer() {
+    const consumer = this.kafkaService.createConsumer('device-consumer-group');
     
-    this.consumer = this.kafkaService.createConsumer('device-consumer-group');
-    await this.consumer.connect();
-    await this.consumer.subscribe({ 
-      topic: 'device-service-esp-history-data',
+    await consumer.connect();
+    await consumer.subscribe({ 
+      topic: this.TOPIC,
       fromBeginning: true
     });
 
-    await this.consumer.run({
+    await consumer.run({
       eachMessage: async (payload: EachMessagePayload) => {
         await this.processMessage(payload);
       }
     });
-    
-    this.logger.log('Consumer inicializado e ouvindo mensagens');
   }
 
   private async processMessage(payload: EachMessagePayload) {
     try {
-      const { message } = payload;
-      if (!message.value) return;
+      if (!payload.message.value) {
+        this.logger.warn('Mensagem recebida sem conteúdo');
+        return;
+      }
 
-      const decoded = await this.schemaRegistry.getRegistry().decode(message.value);
-      this.logger.log(`Mensagem recebida: ${JSON.stringify(decoded)}`);
+      const decoded = await this.schemaRegistry.decode(payload.message.value as Buffer);
+      this.logger.log('Mensagem recebida:', decoded);
       
     } catch (error) {
-      this.logger.error('Erro ao processar mensagem', error.stack);
+      this.logger.error('Erro ao processar mensagem:', error);
     }
-  }
-
-  async onApplicationShutdown() {
-    await this.consumer.disconnect();
   }
 }
